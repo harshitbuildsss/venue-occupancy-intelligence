@@ -1,5 +1,8 @@
 package com.occupancy.api;
 
+import com.occupancy.domain.CrowdStatus;
+import com.occupancy.domain.EventType;
+import com.occupancy.domain.OccupancyEvent;
 import com.occupancy.domain.Venue;
 import com.occupancy.domain.VenueType;
 import com.occupancy.persistence.jpa.SpringDataOccupancyEventRepository;
@@ -14,6 +17,8 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.web.servlet.MockMvc;
+
+import java.time.Instant;
 
 import static org.hamcrest.Matchers.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -189,7 +194,6 @@ class RestApiIntegrationTest {
                 "  \"eventType\": \"ENTRY\"\n" +
                 "}";
 
-        // First call
         mockMvc.perform(post("/api/v1/events")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(json))
@@ -197,7 +201,6 @@ class RestApiIntegrationTest {
                 .andExpect(jsonPath("$.status", is("PROCESSED")))
                 .andExpect(jsonPath("$.currentOccupancy", is(11)));
 
-        // Duplicate call with exact same eventId
         mockMvc.perform(post("/api/v1/events")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(json))
@@ -259,5 +262,38 @@ class RestApiIntegrationTest {
                 .content(json))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.error", is("Malformed Request")));
+    }
+
+    @Test
+    @DisplayName("GET /api/v1/venues/{venueId}/analytics returns 404 if venue does not exist")
+    void testGetVenueAnalyticsNotFound() throws Exception {
+        mockMvc.perform(get("/api/v1/venues/unknown_venue/analytics"))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    @DisplayName("GET /api/v1/venues/{venueId}/analytics returns valid rates and predicted footfall")
+    void testGetVenueAnalyticsSuccess() throws Exception {
+        Venue v = new Venue("mall_analytics", "Select Citywalk", VenueType.MALL, 1000, 200);
+        occupancyService.registerVenue(v);
+
+        occupancyService.processEvent(new OccupancyEvent("e1", "mall_analytics", "g1", EventType.ENTRY, Instant.now()));
+        occupancyService.processEvent(new OccupancyEvent("e2", "mall_analytics", "g1", EventType.ENTRY, Instant.now()));
+        occupancyService.processEvent(new OccupancyEvent("e3", "mall_analytics", "g1", EventType.ENTRY, Instant.now()));
+        occupancyService.processEvent(new OccupancyEvent("e4", "mall_analytics", "g1", EventType.EXIT, Instant.now()));
+
+        mockMvc.perform(get("/api/v1/venues/mall_analytics/analytics?windowMinutes=15"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.venueId", is("mall_analytics")))
+                .andExpect(jsonPath("$.currentOccupancy", is(202)))
+                .andExpect(jsonPath("$.capacity", is(1000)))
+                .andExpect(jsonPath("$.entryRatePerMinute", notNullValue()))
+                .andExpect(jsonPath("$.exitRatePerMinute", notNullValue()))
+                .andExpect(jsonPath("$.netVelocityPerMinute", notNullValue()))
+                .andExpect(jsonPath("$.predictedOccupancy30m", notNullValue()))
+                .andExpect(jsonPath("$.predictedStatus30m", notNullValue()))
+                .andExpect(jsonPath("$.predictedOccupancy60m", notNullValue()))
+                .andExpect(jsonPath("$.predictedStatus60m", notNullValue()))
+                .andExpect(jsonPath("$.windowMinutes", is(15)));
     }
 }
