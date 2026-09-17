@@ -133,30 +133,52 @@ export default function App() {
   }
 
   async function handleManualEvent(venueId, eventType, gateId = 'gate_main') {
-    try {
-      if (backendModeRef.current === 'LOCAL') {
-        await sendOccupancyEvent({
-          venueId,
-          eventType,
-          deviceId: gateId
-        });
+      const currentMode = backendModeRef.current;
+      const uniqueEventId = `evt_${Date.now()}_${Math.floor(Math.random() * 100000)}`;
+
+      try {
+        if (currentMode === 'LOCAL') {
+          await sendOccupancyEvent({
+            eventId: uniqueEventId,
+            venueId,
+            eventType,
+            deviceId: gateId
+          });
+        } else {
+          const response = await fetch(`${AWS_BASE_URL}/events`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              eventId: uniqueEventId,
+              venueId,
+              eventType,
+              deviceId: gateId,
+              timestamp: new Date().toISOString()
+            })
+          });
+
+          if (!response.ok) {
+            console.error('AWS event failed:', await response.text());
+          }
+        }
+
+        setEventLog((prev) => [
+          {
+            id: uniqueEventId,
+            type: eventType,
+            gate: GATES.find((g) => g.id === gateId)?.name || gateId,
+            time: new Date().toLocaleTimeString()
+          },
+          ...prev.slice(0, 19)
+        ]);
+
+        await loadAllVenues(currentMode);
+      } catch (err) {
+        console.error('Event submission failed:', err);
       }
-
-      setEventLog((prev) => [
-        {
-          id: `${Date.now()}_${Math.random()}`,
-          type: eventType,
-          gate: GATES.find((g) => g.id === gateId)?.name || gateId,
-          time: new Date().toLocaleTimeString()
-        },
-        ...prev.slice(0, 19)
-      ]);
-
-      await loadAllVenues(backendModeRef.current);
-    } catch (err) {
-      console.error('Event submission failed:', err);
     }
-  }
 
   async function handleInjectBurst(burstType) {
     const target = venues.find((v) => v.venueId === selectedVenueId);
