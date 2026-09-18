@@ -1,140 +1,145 @@
-import React from 'react';
-import { ArrowUpRight, ArrowDownRight, UserPlus, UserMinus } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { TrendingUp, TrendingDown, Minus, Clock, ArrowRight } from 'lucide-react';
 
-const STATUS_THEMES = {
-  QUIET: {
-    badge: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30',
-    bar: 'bg-emerald-500',
-    glow: 'from-emerald-500/10',
-    label: 'Quiet & Calm'
-  },
-  MODERATE: {
-    badge: 'bg-sky-500/10 text-sky-400 border-sky-500/30',
-    bar: 'bg-sky-500',
-    glow: 'from-sky-500/10',
-    label: 'Moderate Footfall'
-  },
-  BUSY: {
-    badge: 'bg-amber-500/10 text-amber-400 border-amber-500/30',
-    bar: 'bg-amber-500',
-    glow: 'from-amber-500/10',
-    label: 'Busy / Vibrant'
-  },
-  VERY_BUSY: {
-    badge: 'bg-orange-500/10 text-orange-400 border-orange-500/30',
-    bar: 'bg-orange-500',
-    glow: 'from-orange-500/10',
-    label: 'High Density'
-  },
-  NEAR_CAPACITY: {
-    badge: 'bg-rose-500/10 text-rose-400 border-rose-500/30',
-    bar: 'bg-rose-500',
-    glow: 'from-rose-500/10',
-    label: 'Near Capacity'
-  },
-  CAPACITY_ANOMALY: {
-    badge: 'bg-purple-500/10 text-purple-400 border-purple-500/30',
-    bar: 'bg-purple-500',
-    glow: 'from-purple-500/10',
-    label: 'Capacity Overflow'
-  }
+const VENUE_BACKGROUNDS = {
+  gym_cult: 'https://images.unsplash.com/photo-1540497077202-7c8a3999166f?auto=format&fit=crop&w=900&q=80',
+  // Classic university reading hall with bookshelves & study desks
+  lib_central: 'https://images.unsplash.com/photo-1521587760476-6c12a4b040da?auto=format&fit=crop&w=900&q=80',
+  // High-res modern shopping mall atrium with escalators and concourses
+  mall_pacific: 'https://images.unsplash.com/photo-1519567241046-7f570eee3ce6?auto=format&fit=crop&w=900&q=80',
+  // Convention auditorium hall
+  expo_pragati: 'https://images.unsplash.com/photo-1511578314322-379afb476865?auto=format&fit=crop&w=900&q=80'
 };
 
-export default function VenueCard({ venue, previousOccupancy, onManualEvent, onSelect, isSelected }) {
-  const theme = STATUS_THEMES[venue.crowdStatus] || STATUS_THEMES.QUIET;
-  
-  let trend = 'stable';
-  if (previousOccupancy !== undefined) {
-    if (venue.currentOccupancy > previousOccupancy) trend = 'up';
-    else if (venue.currentOccupancy < previousOccupancy) trend = 'down';
+export default function VenueCard({ venue, onSelect }) {
+  const occ = venue.currentOccupancy || 0;
+  const cap = venue.capacity || 1;
+  const percentage = Math.min(100, Math.round((occ / cap) * 100));
+
+  // 1-Second Soft White Shimmer Pulse on Headcount Update
+  const [isUpdating, setIsUpdating] = useState(false);
+  const prevOccRef = useRef(occ);
+
+  useEffect(() => {
+    if (prevOccRef.current !== occ) {
+      setIsUpdating(true);
+      const timer = setTimeout(() => {
+        setIsUpdating(false);
+      }, 900);
+
+      prevOccRef.current = occ;
+      return () => clearTimeout(timer);
+    }
+  }, [occ]);
+
+  // Rush-reactive status badge & capacity bar
+  let statusBadge = { label: 'QUIET', bg: 'bg-emerald-950/80', text: 'text-emerald-300', border: 'border-emerald-500/50' };
+  let barColor = 'bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.5)]';
+
+  if (percentage >= 85) {
+    statusBadge = { label: 'NEAR CAPACITY', bg: 'bg-rose-950/85', text: 'text-rose-300', border: 'border-rose-500/60' };
+    barColor = 'bg-rose-500 shadow-[0_0_12px_rgba(244,63,94,0.7)]';
+  } else if (percentage >= 70) {
+    statusBadge = { label: 'VERY BUSY', bg: 'bg-orange-950/85', text: 'text-orange-300', border: 'border-orange-500/60' };
+    barColor = 'bg-orange-500 shadow-[0_0_10px_rgba(234,88,12,0.6)]';
+  } else if (percentage >= 40) {
+    statusBadge = { label: 'MODERATE', bg: 'bg-amber-950/85', text: 'text-amber-300', border: 'border-amber-500/60' };
+    barColor = 'bg-amber-400 shadow-[0_0_10px_rgba(251,191,36,0.5)]';
   }
 
-  const percentage = Math.min(100, Math.max(0, venue.capacityPercentage));
+  // Velocity trend
+  const velocity = venue.velocityPerMin ?? 0;
+  let trendIcon = <Minus className="w-3.5 h-3.5 text-stone-300" />;
+  let trendText = 'Stable';
+  let trendColor = 'text-stone-300';
+
+  if (velocity > 0.3) {
+    trendIcon = <TrendingUp className="w-3.5 h-3.5 text-amber-300" />;
+    trendText = 'Getting busier';
+    trendColor = 'text-amber-300';
+  } else if (velocity < -0.3) {
+    trendIcon = <TrendingDown className="w-3.5 h-3.5 text-emerald-300" />;
+    trendText = 'Clearing up';
+    trendColor = 'text-emerald-300';
+  }
+
+  const bgImage = VENUE_BACKGROUNDS[venue.venueId] || VENUE_BACKGROUNDS.mall_pacific;
 
   return (
-    <div 
+    <div
       onClick={() => onSelect(venue.venueId)}
-      className={`relative cursor-pointer rounded-2xl border p-5 transition-all duration-200 backdrop-blur-sm ${
-        isSelected 
-          ? 'border-blue-500 bg-slate-900/90 shadow-xl shadow-blue-500/10 ring-1 ring-blue-500/50' 
-          : 'border-slate-800/80 bg-slate-900/40 hover:border-slate-700 hover:bg-slate-900/60'
+      className={`group relative rounded-2xl border p-5 transition-all duration-300 cursor-pointer flex flex-col justify-between overflow-hidden bg-[#0A0D0C] border-white/10 hover:border-white/30 hover:shadow-2xl hover:shadow-black active:scale-[0.99] outline-none select-none ${
+        isUpdating ? 'border-white/50 shadow-[0_0_24px_rgba(255,255,255,0.12)]' : ''
       }`}
     >
-      <div className={`absolute inset-x-0 top-0 h-24 bg-gradient-to-b ${theme.glow} to-transparent rounded-t-2xl pointer-events-none opacity-40`} />
+      {/* 1. Visible, Vibrant Architectural Background Photo */}
+      <img
+        src={bgImage}
+        alt={venue.name}
+        className="absolute inset-0 w-full h-full object-cover opacity-65 contrast-110 saturate-110 transition-transform duration-700 group-hover:scale-105 pointer-events-none"
+      />
 
+      {/* 2. Frosted Scrim Overlay (Clean legibility without muddying the picture) */}
+      <div className="absolute inset-0 bg-gradient-to-t from-[#080A0B]/95 via-[#080A0B]/60 to-[#080A0B]/40 pointer-events-none" />
+
+      {/* 3. Foreground Content */}
       <div className="relative z-10">
-        <div className="flex items-start justify-between">
+        {/* Card Header */}
+        <div className="flex items-start justify-between gap-2">
           <div>
-            <div className="flex items-center space-x-2">
-              <span className="text-xs font-semibold text-slate-400 tracking-wider uppercase">
-                {venue.type}
-              </span>
-              {trend === 'up' && (
-                <span className="flex items-center text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-1 rounded">
-                  <ArrowUpRight className="h-3 w-3 mr-0.5" /> INFLOW
-                </span>
-              )}
-              {trend === 'down' && (
-                <span className="flex items-center text-[10px] font-bold text-rose-400 bg-rose-500/10 px-1 rounded">
-                  <ArrowDownRight className="h-3 w-3 mr-0.5" /> OUTFLOW
-                </span>
-              )}
-            </div>
-            <h3 className="mt-1 text-lg font-bold text-white tracking-tight">{venue.name}</h3>
+            <span className="text-[10px] font-mono uppercase tracking-widest text-stone-300 font-semibold drop-shadow-[0_1px_3px_rgba(0,0,0,0.8)]">
+              {venue.type || 'FACILITY'}
+            </span>
+            <h3 className="text-base font-bold text-white tracking-tight mt-0.5 group-hover:text-amber-200 transition-colors drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]">
+              {venue.name}
+            </h3>
           </div>
-
-          <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold border ${theme.badge}`}>
-            {theme.label}
+          <span className={`text-[10px] font-mono uppercase tracking-wider px-2 py-0.5 rounded-full font-bold border ${statusBadge.bg} ${statusBadge.text} ${statusBadge.border} backdrop-blur-md shadow-md`}>
+            {statusBadge.label}
           </span>
         </div>
 
-        <div className="mt-4 flex items-baseline justify-between">
-          <div>
-            <span className="text-3xl font-extrabold text-white tracking-tight">
-              {venue.currentOccupancy.toLocaleString()}
+        {/* Occupancy Row */}
+        <div className="mt-5 flex items-baseline justify-between">
+          <div className="flex items-baseline">
+            <span className="text-4xl font-extrabold tracking-tight font-sans text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.9)]">
+              {percentage}%
             </span>
-            <span className="text-xs text-slate-400 font-medium ml-1.5">
-              / {venue.capacity.toLocaleString()} max
-            </span>
+            <span className="text-xs text-stone-200 ml-2.5 drop-shadow-[0_1px_3px_rgba(0,0,0,0.8)]">occupied</span>
           </div>
-          <div className="text-right">
-            <span className="text-lg font-bold text-slate-200">
-              {venue.capacityPercentage}%
-            </span>
-            <p className="text-[10px] text-slate-500 uppercase tracking-wider">Occupied</p>
-          </div>
+
+          {/* Shimmer on Headcount Change */}
+          <span
+            className={`text-xs font-mono px-2.5 py-1 rounded-md transition-all duration-300 backdrop-blur-md shadow-md ${
+              isUpdating
+                ? 'bg-white/35 text-white border border-white/60 shadow-white/20 font-bold scale-105'
+                : 'bg-black/60 text-stone-200 border border-white/15'
+            }`}
+          >
+            {occ.toLocaleString()} / {cap.toLocaleString()}
+          </span>
         </div>
 
-        <div className="mt-3 w-full bg-slate-800/80 rounded-full h-2.5 overflow-hidden p-0.5 border border-slate-700/50">
-          <div 
-            className={`h-full rounded-full transition-all duration-500 ease-out ${theme.bar}`}
+        {/* Dynamic Capacity Bar */}
+        <div className="mt-2.5 w-full h-1.5 bg-black/60 rounded-full overflow-hidden backdrop-blur-sm border border-white/10">
+          <div
+            className={`h-full rounded-full transition-all duration-500 ${barColor}`}
             style={{ width: `${percentage}%` }}
           />
         </div>
+      </div>
 
-        <div className="mt-5 pt-4 border-t border-slate-800/80 flex items-center justify-between" onClick={(e) => e.stopPropagation()}>
-          <span className="text-xs text-slate-400 font-medium">Gate Test (+1/-1):</span>
-          <div className="flex space-x-2">
-            <button
-              onClick={() => onManualEvent(venue.venueId, 'ENTRY')}
-              className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 transition-colors"
-              title="Simulate 1 person entering"
-            >
-              <UserPlus className="h-3.5 w-3.5 mr-1" /> Entry
-            </button>
-            <button
-              onClick={() => onManualEvent(venue.venueId, 'EXIT')}
-              disabled={venue.currentOccupancy <= 0}
-              className={`inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold border transition-colors ${
-                venue.currentOccupancy <= 0
-                  ? 'opacity-40 cursor-not-allowed bg-slate-800 text-slate-500 border-slate-700'
-                  : 'bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border-rose-500/30'
-              }`}
-              title={venue.currentOccupancy <= 0 ? "Cannot exit at zero occupancy" : "Simulate 1 person exiting"}
-            >
-              <UserMinus className="h-3.5 w-3.5 mr-1" /> Exit
-            </button>
-          </div>
+      {/* Forecast & Trend Footnote */}
+      <div className="relative z-10 mt-5 pt-3.5 border-t border-white/10 flex items-center justify-between text-xs backdrop-blur-[2px]">
+        <div className={`flex items-center space-x-1.5 ${trendColor} drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]`}>
+          {trendIcon}
+          <span className="font-medium text-[11px]">{trendText}</span>
+        </div>
+
+        <div className="flex items-center space-x-1 text-stone-200 group-hover:text-white transition-colors drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
+          <Clock className="w-3.5 h-3.5 text-stone-300" />
+          <span className="text-[11px] font-mono">60m: {venue.predictedOccupancyIn60Min || occ}</span>
+          <ArrowRight className="w-3 h-3 ml-1 group-hover:translate-x-0.5 transition-transform" />
         </div>
       </div>
     </div>

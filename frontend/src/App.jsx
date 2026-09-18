@@ -1,51 +1,66 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Navbar from './components/Navbar';
 import VenueCard from './components/VenueCard';
-import SimulationControl from './components/SimulationControl';
+import FacilityDrawer from './components/FacilityDrawer';
+import OperatorModal from './components/OperatorModal';
+import ScrollHeroVideo from './components/ScrollHeroVideo';
 import { fetchVenue, createVenue, sendOccupancyEvent } from './services/api';
-import { Building2, AlertCircle, RefreshCcw, Cloud, Server, TrendingDown, TrendingUp, Clock } from 'lucide-react';
+import { Search, Sparkles, TrendingUp, Users } from 'lucide-react';
 
 const AWS_BASE_URL = 'https://d35p0u4mf9.execute-api.ap-south-1.amazonaws.com';
 
 const INITIAL_VENUES = [
   { venueId: 'mall_pacific', name: 'Pacific Mall (Tagore Garden)', type: 'MALL', capacity: 2500, initialOccupancy: 840 },
-  { venueId: 'gym_cult', name: 'Cult.fit Premium Gym', type: 'GYM', capacity: 150, initialOccupancy: 110 },
-  { venueId: 'lib_central', name: 'Central University Library', type: 'LIBRARY', capacity: 400, initialOccupancy: 95 }
+  { venueId: 'gym_cult', name: 'Cult.fit Premium Gym', type: 'GYM', capacity: 150, initialOccupancy: 146 },
+  { venueId: 'lib_central', name: 'Central University Library', type: 'LIBRARY', capacity: 400, initialOccupancy: 110 },
+  { venueId: 'expo_pragati', name: 'Pragati Maidan (Bharat Mandapam)', type: 'EXPO', capacity: 7000, initialOccupancy: 3850 }
 ];
 
 const GATES = [
-  { id: 'gate_main', name: 'Gate A (Main)', weight: 0.45 },
-  { id: 'gate_food_court', name: 'Gate B (Food Court)', weight: 0.30 },
-  { id: 'gate_parking', name: 'Gate C (Parking)', weight: 0.15 },
-  { id: 'gate_rear', name: 'Gate D (Side/Rear)', weight: 0.10 }
+  { id: 'gate_main', name: 'Gate A (Main)', weight: 0.40 },
+  { id: 'gate_food_court', name: 'Gate B (Concourse/Hall)', weight: 0.30 },
+  { id: 'gate_parking', name: 'Gate C (Parking / Metro)', weight: 0.20 },
+  { id: 'gate_rear', name: 'Gate D (Side / Gate 10)', weight: 0.10 }
 ];
 
 export default function App() {
-  const [backendMode, setBackendMode] = useState('AWS'); // 'AWS' or 'LOCAL'
+  const [backendMode, setBackendMode] = useState('AWS');
   const [venues, setVenues] = useState([]);
-  const [previousOccupancies, setPreviousOccupancies] = useState({});
-  const [selectedVenueId, setSelectedVenueId] = useState('mall_pacific');
+  const [selectedVenueId, setSelectedVenueId] = useState('expo_pragati');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [activeCategory, setActiveCategory] = useState('ALL');
   const [isSimulating, setIsSimulating] = useState(false);
   const [eventLog, setEventLog] = useState([]);
   const [backendError, setBackendError] = useState(null);
+
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [isOperatorOpen, setIsOperatorOpen] = useState(false);
+
+  // Sync references to bypass stale closures in intervals
+  const venuesRef = useRef([]);
+  venuesRef.current = venues;
 
   const backendModeRef = useRef(backendMode);
   useEffect(() => {
     backendModeRef.current = backendMode;
   }, [backendMode]);
 
+  const selectedVenueIdRef = useRef(selectedVenueId);
+  useEffect(() => {
+    selectedVenueIdRef.current = selectedVenueId;
+  }, [selectedVenueId]);
+
+  // Initial Load
   useEffect(() => {
     async function initVenues() {
       if (backendModeRef.current === 'LOCAL') {
         try {
           for (const initial of INITIAL_VENUES) {
             const existing = await fetchVenue(initial.venueId);
-            if (!existing) {
-              await createVenue(initial);
-            }
+            if (!existing) await createVenue(initial);
           }
         } catch (err) {
-          console.warn('Local initialization error:', err);
+          console.warn('Local init error:', err);
         }
       }
       await loadAllVenues(backendModeRef.current);
@@ -53,6 +68,7 @@ export default function App() {
     initVenues();
   }, [backendMode]);
 
+  // Polling every 2.0s
   useEffect(() => {
     const interval = setInterval(() => {
       loadAllVenues(backendModeRef.current);
@@ -60,31 +76,101 @@ export default function App() {
     return () => clearInterval(interval);
   }, []);
 
+  // Ambient Footfall Noise
+  useEffect(() => {
+    const ambientTimer = setInterval(() => {
+      const currentVenues = venuesRef.current;
+      if (currentVenues.length === 0) return;
+
+      const randomVenue = currentVenues[Math.floor(Math.random() * currentVenues.length)];
+      const ratio = randomVenue.currentOccupancy / randomVenue.capacity;
+
+      const entryBias = ratio < 0.35 ? 0.80 : ratio > 0.85 ? 0.25 : 0.52;
+      const eventType = Math.random() < entryBias ? 'ENTRY' : 'EXIT';
+      const randomGate = GATES[Math.floor(Math.random() * GATES.length)].id;
+
+      handleManualEvent(randomVenue.venueId, eventType, randomGate, true);
+    }, 1200);
+
+    return () => clearInterval(ambientTimer);
+  }, []);
+
+  // Operator Auto-Traffic Simulation
+  useEffect(() => {
+    if (!isSimulating) return;
+
+    const autoTrafficTimer = setInterval(async () => {
+      const currentVenues = venuesRef.current;
+      if (currentVenues.length === 0) return;
+
+      const shuffled = [...currentVenues].sort(() => 0.5 - Math.random());
+      const targets = shuffled.slice(0, 2);
+
+      for (const target of targets) {
+        const ratio = target.currentOccupancy / target.capacity;
+        const entryBias = ratio < 0.3 ? 0.85 : ratio > 0.85 ? 0.20 : 0.55;
+        let eventType = Math.random() < entryBias ? 'ENTRY' : 'EXIT';
+
+        if (eventType === 'EXIT' && target.currentOccupancy <= 0) {
+          eventType = 'ENTRY';
+        }
+
+        const chosenGate = GATES[Math.floor(Math.random() * GATES.length)].id;
+        await handleManualEvent(target.venueId, eventType, chosenGate, false);
+      }
+    }, 600);
+
+    return () => clearInterval(autoTrafficTimer);
+  }, [isSimulating]);
+
   async function loadAllVenues(mode = backendModeRef.current) {
     try {
       let normalizedVenues = [];
 
       if (mode === 'AWS') {
         const res = await fetch(`${AWS_BASE_URL}/venues`);
-        if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+        if (!res.ok) throw new Error(`HTTP error: ${res.status}`);
         const data = await res.json();
 
-        normalizedVenues = (Array.isArray(data) ? data : []).map((v) => {
-          const occ = Number(v.currentOccupancy || 0);
+        let apiVenues = Array.isArray(data) ? [...data] : [];
+
+        // Retain current in-memory count for expo_pragati to avoid 3850 overwrite
+        const hasPragati = apiVenues.some((v) => v.venueId === 'expo_pragati');
+        if (!hasPragati) {
+          const currentMemoryPragati = venuesRef.current.find((v) => v.venueId === 'expo_pragati');
+          const pmInitial = INITIAL_VENUES.find((v) => v.venueId === 'expo_pragati');
+          const currentOcc = currentMemoryPragati ? currentMemoryPragati.currentOccupancy : pmInitial.initialOccupancy;
+
+          apiVenues.push({
+            venueId: 'expo_pragati',
+            name: 'Pragati Maidan (Bharat Mandapam)',
+            type: 'EXPO',
+            capacity: 7000,
+            currentOccupancy: currentOcc
+          });
+        }
+
+        normalizedVenues = apiVenues.map((v) => {
           const cap = Number(v.capacity || 1);
+          const inMem = venuesRef.current.find((m) => m.venueId === v.venueId);
+          const occ = v.venueId === 'expo_pragati' && inMem ? inMem.currentOccupancy : Number(v.currentOccupancy || 0);
+
           const p60 = v.predictedOccupancyIn60Min !== undefined
             ? Number(v.predictedOccupancyIn60Min)
-            : Math.max(0, Math.min(cap, Math.round(occ * 0.85)));
-          const p30 = Math.max(0, Math.min(cap, Math.round(occ * 0.92)));
+            : Math.max(0, Math.min(cap, Math.round(occ * 0.88)));
+          const p30 = Math.max(0, Math.min(cap, Math.round(occ * 0.94)));
           const velocity = Math.round(((p60 - occ) / 60) * 10) / 10;
+          const capacityPercentage = Math.min(100, Math.round((occ / cap) * 100));
 
           return {
             venueId: v.venueId,
             name: v.name,
             type: v.type,
             capacity: cap,
+            maxCapacity: cap,
             currentOccupancy: occ,
-            crowdStatus: v.crowdStatus || (occ / cap > 0.8 ? 'BUSY' : occ / cap > 0.4 ? 'MODERATE' : 'QUIET'),
+            capacityPercentage: capacityPercentage,
+            crowdStatus: capacityPercentage >= 85 ? 'NEAR CAPACITY' : capacityPercentage >= 65 ? 'VERY BUSY' : capacityPercentage >= 40 ? 'MODERATE' : 'QUIET',
             predictedOccupancyIn30Min: p30,
             predictedOccupancyIn60Min: p60,
             velocityPerMin: velocity,
@@ -93,19 +179,26 @@ export default function App() {
         });
       } else {
         const fetched = await Promise.all(
-          INITIAL_VENUES.map(async (v) => {
-            const data = await fetchVenue(v.venueId);
-            return data;
-          })
+          INITIAL_VENUES.map(async (v) => await fetchVenue(v.venueId))
         );
-        normalizedVenues = fetched.filter(Boolean).map((v) => {
-          const occ = Number(v.currentOccupancy || 0);
-          const cap = Number(v.capacity || 1);
-          const p60 = Math.max(0, Math.min(cap, Math.round(occ * 0.85)));
-          const p30 = Math.max(0, Math.min(cap, Math.round(occ * 0.92)));
+
+        normalizedVenues = fetched.filter(Boolean).map((item) => {
+          const cap = Number(item.capacity || item.maxCapacity || 1);
+          const inMem = venuesRef.current.find((m) => m.venueId === item.venueId);
+          const occ = item.venueId === 'expo_pragati' && inMem ? inMem.currentOccupancy : Number(item.currentOccupancy || 0);
+
+          const p60 = Math.max(0, Math.min(cap, Math.round(occ * 0.88)));
+          const p30 = Math.max(0, Math.min(cap, Math.round(occ * 0.94)));
           const velocity = Math.round(((p60 - occ) / 60) * 10) / 10;
+          const calculatedPercent = Math.min(100, Math.round((occ / cap) * 100));
+
           return {
-            ...v,
+            ...item,
+            capacity: cap,
+            maxCapacity: cap,
+            currentOccupancy: occ,
+            capacityPercentage: calculatedPercent,
+            crowdStatus: calculatedPercent >= 85 ? 'NEAR CAPACITY' : calculatedPercent >= 65 ? 'VERY BUSY' : calculatedPercent >= 40 ? 'MODERATE' : 'QUIET',
             predictedOccupancyIn30Min: p30,
             predictedOccupancyIn60Min: p60,
             velocityPerMin: velocity
@@ -113,57 +206,60 @@ export default function App() {
         });
       }
 
-      setVenues((prev) => {
-        const prevMap = {};
-        prev.forEach((v) => {
-          prevMap[v.venueId] = v.currentOccupancy;
-        });
-        setPreviousOccupancies(prevMap);
-        return normalizedVenues;
-      });
+      setVenues(normalizedVenues);
       setBackendError(null);
     } catch (err) {
-      console.warn('Polling error:', err.message);
       if (mode === 'LOCAL') {
-        setBackendError('Cannot connect to backend server (http://localhost:8080). Ensure Spring Boot is running.');
+        setBackendError('Local server unreachable (http://localhost:8080).');
       } else {
-        setBackendError(`Cannot connect to AWS API Gateway (${AWS_BASE_URL}). Check internet or CORS.`);
+        setBackendError(`Cannot reach AWS API Gateway.`);
       }
     }
   }
 
-  async function handleManualEvent(venueId, eventType, gateId = 'gate_main') {
-      const currentMode = backendModeRef.current;
-      const uniqueEventId = `evt_${Date.now()}_${Math.floor(Math.random() * 100000)}`;
+  async function handleManualEvent(venueId, eventType, gateId = 'gate_main', isSilent = false) {
+    const currentMode = backendModeRef.current;
+    const uniqueEventId = `evt_${Date.now()}_${Math.floor(Math.random() * 100000)}`;
 
-      try {
-        if (currentMode === 'LOCAL') {
-          await sendOccupancyEvent({
+    const delta = venueId === 'expo_pragati' ? 18 : 1;
+
+    setVenues((prev) =>
+      prev.map((v) => {
+        if (v.venueId !== venueId) return v;
+        const adjustment = eventType === 'ENTRY' ? delta : -delta;
+        const newOcc = Math.max(0, Math.min(v.capacity, v.currentOccupancy + adjustment));
+        const newPct = Math.round((newOcc / v.capacity) * 100);
+        return {
+          ...v,
+          currentOccupancy: newOcc,
+          capacityPercentage: newPct
+        };
+      })
+    );
+
+    try {
+      if (currentMode === 'LOCAL') {
+        await sendOccupancyEvent({
+          eventId: uniqueEventId,
+          venueId,
+          eventType,
+          deviceId: gateId
+        });
+      } else {
+        await fetch(`${AWS_BASE_URL}/events`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
             eventId: uniqueEventId,
             venueId,
             eventType,
-            deviceId: gateId
-          });
-        } else {
-          const response = await fetch(`${AWS_BASE_URL}/events`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-              eventId: uniqueEventId,
-              venueId,
-              eventType,
-              deviceId: gateId,
-              timestamp: new Date().toISOString()
-            })
-          });
+            deviceId: gateId,
+            timestamp: new Date().toISOString()
+          })
+        });
+      }
 
-          if (!response.ok) {
-            console.error('AWS event failed:', await response.text());
-          }
-        }
-
+      if (!isSilent) {
         setEventLog((prev) => [
           {
             id: uniqueEventId,
@@ -173,234 +269,229 @@ export default function App() {
           },
           ...prev.slice(0, 19)
         ]);
-
-        await loadAllVenues(currentMode);
-      } catch (err) {
-        console.error('Event submission failed:', err);
       }
-    }
-
-  async function handleInjectBurst(burstType) {
-    const target = venues.find((v) => v.venueId === selectedVenueId);
-    if (!target) return;
-
-    for (let i = 0; i < 6; i++) {
-      const randomGate = GATES[Math.floor(Math.random() * GATES.length)].id;
-      await handleManualEvent(selectedVenueId, burstType, randomGate);
+    } catch (err) {
+      console.error(err);
     }
   }
 
-  useEffect(() => {
-    if (!isSimulating) return;
+  async function handleInjectBurst(burstType) {
+    const targetId = selectedVenueIdRef.current;
+    for (let i = 0; i < 6; i++) {
+      const randomGate = GATES[Math.floor(Math.random() * GATES.length)].id;
+      await handleManualEvent(targetId, burstType, randomGate, false);
+    }
+  }
 
-    const timer = setInterval(async () => {
-      const target = venues.find((v) => v.venueId === selectedVenueId);
-      if (!target) return;
-
-      const r = Math.random();
-      let cumulative = 0;
-      let chosenGate = GATES[0].id;
-      for (const gate of GATES) {
-        cumulative += gate.weight;
-        if (r <= cumulative) {
-          chosenGate = gate.id;
-          break;
-        }
-      }
-
-      const ratio = target.currentOccupancy / target.capacity;
-      const entryProbability = ratio < 0.3 ? 0.85 : ratio < 0.7 ? 0.55 : 0.25;
-      let eventType = Math.random() < entryProbability ? 'ENTRY' : 'EXIT';
-
-      if (eventType === 'EXIT' && target.currentOccupancy <= 0) {
-        eventType = 'ENTRY';
-      }
-
-      await handleManualEvent(selectedVenueId, eventType, chosenGate);
-    }, 450);
-
-    return () => clearInterval(timer);
-  }, [isSimulating, selectedVenueId, venues]);
-
-  const selectedVenue = venues.find((v) => v.venueId === selectedVenueId);
+  const selectedVenue = venues.find((v) => v.venueId === selectedVenueId) || venues[0] || {};
+  const highCapacityVenue = venues.find((v) => v.capacityPercentage >= 85);
+  const quietestVenue = [...venues].sort((a, b) => a.capacityPercentage - b.capacityPercentage)[0];
+  const busiestVenue = [...venues].sort((a, b) => b.capacityPercentage - a.capacityPercentage)[0];
   const totalOccupancy = venues.reduce((acc, v) => acc + (v.currentOccupancy || 0), 0);
-  const totalCapacity = venues.reduce((acc, v) => acc + (v.capacity || 0), 0);
-  const averageUtilization = totalCapacity > 0 ? Math.round((totalOccupancy / totalCapacity) * 100) : 0;
+
+  const filteredVenues = venues.filter((v) => {
+    const matchesSearch = v.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                          v.type.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesCategory = activeCategory === 'ALL' || v.type === activeCategory;
+    return matchesSearch && matchesCategory;
+  });
 
   return (
-    <div className="min-h-screen bg-slate-950 flex flex-col font-sans">
-      <Navbar isPolling={!backendError} activeCount={venues.length} />
+    <div className="min-h-screen w-full bg-[#080A0B] text-stone-100 font-sans selection:bg-[#FF7A1A]/30 overflow-x-hidden [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+      <ScrollHeroVideo />
 
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
-        {/* Backend Mode Switcher */}
-        <div className="flex flex-wrap items-center justify-between bg-slate-900/80 border border-slate-800 rounded-2xl p-4 gap-4">
-          <div className="flex items-center space-x-3">
-            <div className={`p-2 rounded-xl ${backendMode === 'AWS' ? 'bg-amber-500/20 text-amber-400' : 'bg-blue-500/20 text-blue-400'}`}>
-              {backendMode === 'AWS' ? <Cloud className="h-5 w-5" /> : <Server className="h-5 w-5" />}
+      <Navbar
+        isPolling={!backendError}
+        activeCount={venues.length}
+        isOperatorOpen={isOperatorOpen}
+        onToggleOperator={() => setIsOperatorOpen(!isOperatorOpen)}
+        highCapacityVenue={highCapacityVenue}
+      />
+
+      <main className="max-w-7xl mx-auto px-4 sm:px-8 py-4 space-y-4">
+
+        {/* 1. City Pulse Bar */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
+          <div className="bg-[#101312] border border-[#252826] rounded-xl p-3.5 flex items-center space-x-3.5">
+            <div className="w-9 h-9 rounded-lg bg-[#FF7A1A]/10 border border-[#FF7A1A]/20 flex items-center justify-center text-[#FF9A3D]">
+              <Users className="w-4 h-4" />
             </div>
             <div>
-              <div className="flex items-center space-x-2">
-                <span className="text-sm font-bold text-white">
-                  {backendMode === 'AWS' ? 'AWS Cloud (Serverless Live)' : 'Local Environment (Spring Boot / H2)'}
-                </span>
-                <span className={`text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full font-bold ${
-                  backendMode === 'AWS' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-slate-700 text-slate-300'
-                }`}>
-                  {backendMode === 'AWS' ? 'Connected' : 'Standalone'}
-                </span>
-              </div>
-              <p className="text-xs text-slate-400 mt-0.5">
-                {backendMode === 'AWS'
-                  ? 'Ingesting via AWS IoT Core & serving from API Gateway'
-                  : 'Direct REST communication with Spring Boot port 8080'}
-              </p>
+              <span className="text-[10px] font-mono uppercase tracking-widest text-stone-500 font-semibold">City Live Headcount</span>
+              <div className="text-lg font-bold text-white mt-0.5">{totalOccupancy.toLocaleString()} active visitors</div>
             </div>
           </div>
 
-          <div className="flex items-center bg-slate-950 p-1.5 rounded-xl border border-slate-800">
-            <button
-              onClick={() => setBackendMode('LOCAL')}
-              className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all flex items-center space-x-1.5 ${
-                backendMode === 'LOCAL'
-                  ? 'bg-blue-600 text-white shadow-lg'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              <Server className="h-3.5 w-3.5" />
-              <span>Local (H2)</span>
-            </button>
-            <button
-              onClick={() => setBackendMode('AWS')}
-              className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all flex items-center space-x-1.5 ${
-                backendMode === 'AWS'
-                  ? 'bg-amber-500 text-slate-950 font-bold shadow-lg'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              <Cloud className="h-3.5 w-3.5" />
-              <span>AWS Cloud</span>
-            </button>
+          <div className="bg-[#101312] border border-[#252826] rounded-xl p-3.5 flex items-center space-x-3.5">
+            <div className="w-9 h-9 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
+              <Sparkles className="w-4 h-4" />
+            </div>
+            <div>
+              <span className="text-[10px] font-mono uppercase tracking-widest text-stone-500 font-semibold">Best Time To Visit</span>
+              <div className="text-sm font-bold text-white mt-0.5 truncate max-w-[200px]">
+                {quietestVenue ? quietestVenue.name : 'All Normal'}
+              </div>
+              <span className="text-[11px] text-emerald-400 font-mono">Only {quietestVenue?.capacityPercentage || 0}% full</span>
+            </div>
+          </div>
+
+          <div className="bg-[#101312] border border-[#252826] rounded-xl p-3.5 flex items-center space-x-3.5">
+            <div className="w-9 h-9 rounded-lg bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-400">
+              <TrendingUp className="w-4 h-4" />
+            </div>
+            <div>
+              <span className="text-[10px] font-mono uppercase tracking-widest text-stone-500 font-semibold">Peak Choke Point</span>
+              <div className="text-sm font-bold text-white mt-0.5 truncate max-w-[200px]">
+                {busiestVenue ? busiestVenue.name : 'None'}
+              </div>
+              <span className="text-[11px] text-rose-400 font-mono">{busiestVenue?.capacityPercentage || 0}% peak saturation</span>
+            </div>
           </div>
         </div>
 
-        {backendError && (
-          <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 p-4 flex items-start space-x-3 text-rose-300">
-            <AlertCircle className="h-5 w-5 mt-0.5 text-rose-400 flex-shrink-0" />
-            <div className="flex-1 text-sm">
-              <p className="font-bold">Backend Connection Error</p>
-              <p className="text-rose-400 text-xs mt-0.5">{backendError}</p>
-            </div>
-            <button
-              onClick={() => loadAllVenues(backendMode)}
-              className="px-3 py-1 bg-rose-500/20 hover:bg-rose-500/30 text-rose-200 text-xs font-semibold rounded-lg border border-rose-500/40 flex items-center"
-            >
-              <RefreshCcw className="h-3 w-3 mr-1" /> Retry
-            </button>
+        {/* 2. Filters & Search */}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pt-1">
+          <div className="flex items-center space-x-2 overflow-x-auto pb-1 sm:pb-0 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+            {['ALL', 'MALL', 'GYM', 'LIBRARY', 'EXPO'].map((cat) => (
+              <button
+                key={cat}
+                onClick={() => setActiveCategory(cat)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-mono tracking-wider transition-all cursor-pointer ${
+                  activeCategory === cat
+                    ? 'bg-[#FF7A1A] text-[#080A0B] font-bold shadow-md shadow-[#FF7A1A]/20'
+                    : 'bg-[#101312] text-stone-400 hover:text-white border border-[#252826]'
+                }`}
+              >
+                {cat === 'ALL' ? 'All Spaces' : cat === 'MALL' ? 'Shopping' : cat === 'GYM' ? 'Fitness' : cat === 'LIBRARY' ? 'Study & Quiet' : 'Expos & Trade'}
+              </button>
+            ))}
           </div>
-        )}
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div className="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-4 backdrop-blur-sm">
-            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Total People Monitored</span>
-            <div className="text-2xl font-extrabold text-white mt-1">{totalOccupancy.toLocaleString()}</div>
-            <p className="text-[11px] text-slate-500 mt-0.5">Across all active gate turnstiles</p>
-          </div>
-          <div className="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-4 backdrop-blur-sm">
-            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Average Capacity Utilization</span>
-            <div className="text-2xl font-extrabold text-white mt-1">{averageUtilization}%</div>
-            <p className="text-[11px] text-slate-500 mt-0.5">{totalOccupancy.toLocaleString()} / {totalCapacity.toLocaleString()} total slots</p>
-          </div>
-          <div className="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-4 backdrop-blur-sm">
-            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Monitored Facilities</span>
-            <div className="text-2xl font-extrabold text-blue-400 mt-1">{venues.length} Venues</div>
-            <p className="text-[11px] text-slate-500 mt-0.5">Malls, Gyms & Campus Buildings</p>
+          <div className="relative w-full sm:w-72">
+            <Search className="w-4 h-4 text-stone-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search by facility name..."
+              className="w-full pl-10 pr-4 py-1.5 bg-[#101312] border border-[#252826] rounded-xl text-xs text-white placeholder-stone-500 focus:outline-none focus:border-[#FF7A1A]"
+            />
           </div>
         </div>
 
-        {/* Predictive Demand & Velocity Row */}
-        {selectedVenue && (
-          <div className="bg-slate-900/40 border border-slate-800 rounded-2xl p-5">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center space-x-2">
-                <Clock className="h-4 w-4 text-amber-400" />
-                <h3 className="text-sm font-bold text-white uppercase tracking-wider">
-                  Real-time Intelligence & Prediction: {selectedVenue.name}
-                </h3>
-              </div>
-              <span className="text-[11px] text-slate-500">Linear 60-min damped regression</span>
-            </div>
-
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-              <div className="bg-slate-950/70 border border-slate-800/80 rounded-xl p-3.5">
-                <span className="text-[11px] text-slate-400 font-medium">Current Status</span>
-                <div className="text-lg font-bold text-white mt-1">{selectedVenue.crowdStatus}</div>
-                <span className="text-[10px] text-slate-500">{selectedVenue.currentOccupancy} / {selectedVenue.capacity}</span>
-              </div>
-
-              <div className="bg-slate-950/70 border border-slate-800/80 rounded-xl p-3.5">
-                <span className="text-[11px] text-slate-400 font-medium">Est. in 30 Min</span>
-                <div className="text-lg font-bold text-sky-400 mt-1">{selectedVenue.predictedOccupancyIn30Min}</div>
-                <span className="text-[10px] text-slate-500">
-                  {Math.round((selectedVenue.predictedOccupancyIn30Min / selectedVenue.capacity) * 100)}% capacity
-                </span>
-              </div>
-
-              <div className="bg-slate-950/70 border border-slate-800/80 rounded-xl p-3.5">
-                <span className="text-[11px] text-slate-400 font-medium">Est. in 60 Min</span>
-                <div className="text-lg font-bold text-amber-400 mt-1">{selectedVenue.predictedOccupancyIn60Min}</div>
-                <span className="text-[10px] text-slate-500">
-                  {Math.round((selectedVenue.predictedOccupancyIn60Min / selectedVenue.capacity) * 100)}% capacity
-                </span>
-              </div>
-
-              <div className="bg-slate-950/70 border border-slate-800/80 rounded-xl p-3.5">
-                <span className="text-[11px] text-slate-400 font-medium">Net Velocity</span>
-                <div className={`text-lg font-bold mt-1 flex items-center ${selectedVenue.velocityPerMin >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                  {selectedVenue.velocityPerMin >= 0 ? <TrendingUp className="h-4 w-4 mr-1" /> : <TrendingDown className="h-4 w-4 mr-1" />}
-                  {selectedVenue.velocityPerMin > 0 ? `+${selectedVenue.velocityPerMin}` : selectedVenue.velocityPerMin}/min
-                </div>
-                <span className="text-[10px] text-slate-500">Rate of change</span>
-              </div>
-            </div>
-          </div>
-        )}
-
-        <section>
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h2 className="text-lg font-bold text-white tracking-tight flex items-center">
-                <Building2 className="h-5 w-5 mr-2 text-blue-400" /> Monitored Physical Venues
-              </h2>
-              <p className="text-xs text-slate-400">Click a card to focus the live simulation controller</p>
-            </div>
-            <span className="text-xs text-slate-500">Auto-refreshing every 2.0s</span>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-            {venues.map((venue) => (
+        {/* 3. Main Split View */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-start">
+          
+          <div className="lg:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+            {filteredVenues.map((venue) => (
               <VenueCard
                 key={venue.venueId}
                 venue={venue}
-                previousOccupancy={previousOccupancies[venue.venueId]}
-                onManualEvent={handleManualEvent}
-                onSelect={(id) => setSelectedVenueId(id)}
-                isSelected={selectedVenueId === venue.venueId}
+                onSelect={(id) => {
+                  setSelectedVenueId(id);
+                  setIsDrawerOpen(true);
+                }}
               />
             ))}
           </div>
-        </section>
 
-        <section>
-          <SimulationControl
-            selectedVenue={selectedVenue}
-            isSimulating={isSimulating}
-            onToggleSimulation={() => setIsSimulating(!isSimulating)}
-            onInjectBurst={handleInjectBurst}
-            gates={GATES}
-            eventLog={eventLog}
-          />
-        </section>
+          {selectedVenue && (
+            <div className="bg-[#101312] border border-[#252826] rounded-2xl p-4 space-y-4 sticky top-20 transition-all duration-300">
+              <div className="flex items-start justify-between">
+                <div>
+                  <span className="text-[10px] font-mono uppercase tracking-widest text-[#FF9A3D] font-bold">
+                    Featured Spotlight • {selectedVenue.type}
+                  </span>
+                  <h3 className="text-base font-bold text-white mt-0.5 leading-tight">{selectedVenue.name}</h3>
+                </div>
+                <button
+                  onClick={() => setIsDrawerOpen(true)}
+                  className="text-xs font-mono text-stone-400 hover:text-[#FF9A3D] underline cursor-pointer"
+                >
+                  Full Drawer →
+                </button>
+              </div>
+
+              <div className="p-3 rounded-xl bg-[#151817] border border-[#252826]">
+                <div className="flex justify-between text-xs text-stone-400 font-mono">
+                  <span>Current Saturation</span>
+                  <span>{selectedVenue.currentOccupancy} / {selectedVenue.capacity} visitors</span>
+                </div>
+                <div className="text-2xl font-extrabold text-white mt-1 font-sans">
+                  {selectedVenue.capacityPercentage}%
+                </div>
+                <div className="w-full h-2 bg-[#202422] rounded-full mt-2 overflow-hidden">
+                  <div
+                    className={`h-full transition-all duration-500 ${
+                      selectedVenue.capacityPercentage >= 85 ? 'bg-rose-500' : selectedVenue.capacityPercentage >= 65 ? 'bg-[#FF7A1A]' : 'bg-emerald-500'
+                    }`}
+                    style={{ width: `${selectedVenue.capacityPercentage}%` }}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2.5 text-center">
+                <div className="bg-[#151817] border border-[#252826] rounded-xl p-2.5">
+                  <span className="text-[10px] font-mono text-stone-400 uppercase">30 Min Forecast</span>
+                  <div className="text-base font-bold text-white mt-0.5 font-sans">{selectedVenue.predictedOccupancyIn30Min}</div>
+                  <span className="text-[10px] text-stone-500 font-mono">
+                    {Math.round(((selectedVenue.predictedOccupancyIn30Min || 0) / (selectedVenue.capacity || 1)) * 100)}% cap
+                  </span>
+                </div>
+                <div className="bg-[#151817] border border-[#252826] rounded-xl p-2.5">
+                  <span className="text-[10px] font-mono text-stone-400 uppercase">60 Min Forecast</span>
+                  <div className="text-base font-bold text-[#FF9A3D] mt-0.5 font-sans">{selectedVenue.predictedOccupancyIn60Min}</div>
+                  <span className="text-[10px] text-stone-500 font-mono">
+                    {Math.round(((selectedVenue.predictedOccupancyIn60Min || 0) / (selectedVenue.capacity || 1)) * 100)}% cap
+                  </span>
+                </div>
+              </div>
+
+              <div className="pt-2 border-t border-[#202422]">
+                <div className="flex justify-between text-[11px] text-stone-400 mb-2">
+                  <span>Typical Rush Curve</span>
+                  <span className="text-[#FF9A3D] font-mono text-[10px]">Active Sensor Stream</span>
+                </div>
+                <div className="flex items-end justify-between h-12 px-2">
+                  {[25, 45, Math.min(100, Math.max(30, selectedVenue.capacityPercentage)), 88, 70, 32].map((val, idx) => (
+                    <div
+                      key={idx}
+                      className={`w-5 rounded-t transition-all duration-300 ${idx === 2 ? 'bg-[#FF7A1A] shadow-md shadow-[#FF7A1A]/40' : 'bg-[#252826]'}`}
+                      style={{ height: `${val}%` }}
+                    />
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+        </div>
+
       </main>
+
+      {/* Facility Drawer */}
+      {isDrawerOpen && (
+        <FacilityDrawer
+          venue={selectedVenue}
+          onClose={() => setIsDrawerOpen(false)}
+        />
+      )}
+
+      {/* Operator Modal */}
+      <OperatorModal
+        isOpen={isOperatorOpen}
+        onClose={() => setIsOperatorOpen(false)}
+        backendMode={backendMode}
+        setBackendMode={setBackendMode}
+        backendError={backendError}
+        loadAllVenues={loadAllVenues}
+        selectedVenue={selectedVenue}
+        isSimulating={isSimulating}
+        onToggleSimulation={() => setIsSimulating(!isSimulating)}
+        onInjectBurst={handleInjectBurst}
+        gates={GATES}
+        eventLog={eventLog}
+      />
     </div>
   );
 }
