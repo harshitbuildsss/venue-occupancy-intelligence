@@ -5,6 +5,24 @@ export default function ScrollHeroVideo() {
   const [slide, setSlide] = useState(0); // 0 = Mall, 1 = Gym, 2 = Dashboard active
   const isAnimating = useRef(false);
 
+  const mallVideoRef = useRef(null);
+  const gymVideoRef = useRef(null);
+
+  // Synchronize playback: only decode and run the visible slide's video
+  useEffect(() => {
+    if (slide === 0) {
+      if (mallVideoRef.current) mallVideoRef.current.play().catch(() => {});
+      if (gymVideoRef.current) gymVideoRef.current.pause();
+    } else if (slide === 1) {
+      if (gymVideoRef.current) gymVideoRef.current.play().catch(() => {});
+      if (mallVideoRef.current) mallVideoRef.current.pause();
+    } else {
+      // At Dashboard: pause both background decoders completely
+      if (mallVideoRef.current) mallVideoRef.current.pause();
+      if (gymVideoRef.current) gymVideoRef.current.pause();
+    }
+  }, [slide]);
+
   // Keep scroll locked strictly during Hero presentation (slide 0 or 1)
   useEffect(() => {
     if (slide < 2) {
@@ -47,7 +65,6 @@ export default function ScrollHeroVideo() {
 
   useEffect(() => {
     const handleWheel = (e) => {
-      // When at Dashboard: If user scrolls up at the very top of the page, bring the Gym card back
       if (slide === 2) {
         if (window.scrollY <= 5 && e.deltaY < -25 && !isAnimating.current) {
           e.preventDefault();
@@ -56,7 +73,6 @@ export default function ScrollHeroVideo() {
         return;
       }
 
-      // Inside Hero Section: Manage slides
       if (isAnimating.current) return;
 
       if (e.deltaY > 20) {
@@ -78,23 +94,26 @@ export default function ScrollHeroVideo() {
     >
       {/* =========================================================
           FRAME 2: GYM CARD (Revealed when Mall glides up)
-         ========================================================= */}
+          ========================================================= */}
       <div
-        className="absolute inset-0 w-full h-full flex items-center justify-center transition-all duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] shadow-2xl shadow-black z-10"
+        className="absolute inset-0 w-full h-full flex items-center justify-center transition-all duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] shadow-2xl shadow-black z-10 will-change-transform"
         style={{
           transform: slide >= 2 ? 'translateY(-105%) scale(0.96)' : 'translateY(0%) scale(1)',
           borderRadius: slide >= 2 ? '3rem' : '0rem',
           overflow: 'hidden',
-          visibility: slide === 0 ? 'hidden' : 'visible', // Completely prevents text overlap on refresh
+          opacity: slide === 0 ? 0 : 1,
+          pointerEvents: slide === 1 ? 'auto' : 'none',
         }}
       >
         <video
+          ref={gymVideoRef}
           src="/videos/crowd-gym.mp4"
-          autoPlay
           loop
           muted
           playsInline
-          className="absolute inset-0 w-full h-full object-cover brightness-[0.65] contrast-[1.08] scale-105"
+          preload="auto"
+          disablePictureInPicture
+          className="absolute inset-0 w-full h-full object-cover brightness-[0.65] contrast-[1.08] scale-105 pointer-events-none"
         />
 
         <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/30 to-slate-950/80 pointer-events-none" />
@@ -108,7 +127,7 @@ export default function ScrollHeroVideo() {
           </div>
 
           <div className="space-y-3">
-           <h1 className="text-5xl sm:text-7xl font-serif font-light text-white tracking-tight leading-[1.12]">
+            <h1 className="text-5xl sm:text-7xl font-serif font-light text-white tracking-tight leading-[1.12]">
               <span className="inline-block mr-1">W</span>hat if you knew <br />
               <span className="italic font-normal text-[#FFF2E0]">before you even stepped out?</span>
             </h1>
@@ -130,23 +149,26 @@ export default function ScrollHeroVideo() {
 
       {/* =========================================================
           FRAME 1: MALL CARD (Visible on slide 0, slides up on slide 1)
-         ========================================================= */}
+          ========================================================= */}
       <div
-        className="absolute inset-0 w-full h-full flex items-center justify-center transition-all duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] shadow-2xl shadow-black z-20"
+        className="absolute inset-0 w-full h-full flex items-center justify-center transition-all duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] shadow-2xl shadow-black z-20 will-change-transform"
         style={{
           transform: slide >= 1 ? 'translateY(-105%) scale(0.96)' : 'translateY(0%) scale(1)',
           borderRadius: slide >= 1 ? '3rem' : '0rem',
           overflow: 'hidden',
-          visibility: slide >= 2 ? 'hidden' : 'visible',
+          pointerEvents: slide === 0 ? 'auto' : 'none',
         }}
       >
         <video
+          ref={mallVideoRef}
           src="/videos/crowd-mall.mp4"
           autoPlay
           loop
           muted
           playsInline
-          className="absolute inset-0 w-full h-full object-cover brightness-[0.65] contrast-[1.08] scale-105"
+          preload="auto"
+          disablePictureInPicture
+          className="absolute inset-0 w-full h-full object-cover brightness-[0.65] contrast-[1.08] scale-105 pointer-events-none"
         />
 
         <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/30 to-slate-950/80 pointer-events-none" />
@@ -169,7 +191,7 @@ export default function ScrollHeroVideo() {
           </div>
 
           <p className="max-w-2xl mx-auto text-sm sm:text-base text-slate-300 font-light tracking-wide leading-relaxed drop-shadow">
-            Shopping malls, transit hubs, and campus facilities reach critical choke points in minutes.
+            Shopping malls, transit hubs, gyms, and campus facilities reach critical choke points in minutes.
           </p>
         </div>
 

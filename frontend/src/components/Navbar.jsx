@@ -17,7 +17,7 @@ export default function Navbar({ isPolling, activeCount, isOperatorOpen, onToggl
                 Live
               </span>
             </div>
-            <p className="text-[11px] text-stone-400 font-normal">Real-Time Footfall Telemetry</p>
+            <p className="text-[11px] text-stone-400 font-normal">Real-time venue intelligence</p>
           </div>
         </div>
 
