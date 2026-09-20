@@ -1,6 +1,5 @@
-import React from 'react';
-import { X, Cloud, Server, AlertCircle, RefreshCcw } from 'lucide-react';
-import SimulationControl from './SimulationControl';
+import React, { useState } from 'react';
+import { X, Play, Square, Zap, Radio, Cloud, Server, AlertTriangle } from 'lucide-react';
 
 export default function OperatorModal({
   isOpen,
@@ -13,112 +12,168 @@ export default function OperatorModal({
   isSimulating,
   onToggleSimulation,
   onInjectBurst,
-  gates,
-  eventLog
+  gates = [],
+  eventLog = []
 }) {
   if (!isOpen) return null;
 
+  const [selectedGate, setSelectedGate] = useState(gates[0]?.id || 'gate_main');
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4">
-      <div className="w-full max-w-4xl bg-[#0F1211] border border-[#252826] rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      {/* Backdrop */}
+      <div 
+        onClick={onClose} 
+        className="absolute inset-0 bg-stone-900/40 backdrop-blur-sm transition-opacity" 
+      />
+
+      {/* Modal Card */}
+      <div className="relative bg-[#FAF9F5] border border-[#EAE9E4] rounded-3xl w-full max-w-2xl overflow-hidden shadow-2xl z-10">
         
-        {/* Modal Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-[#252826] bg-[#0A0D0C]">
-          <div className="flex items-center space-x-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-[#FF7A1A]" />
-            <h2 className="text-sm font-mono uppercase tracking-widest text-white font-bold">
-              Engineering Console & Telemetry Deck
-            </h2>
+        {/* Header */}
+        <div className="p-6 bg-white border-b border-[#EAE9E4] flex items-center justify-between">
+          <div className="flex items-center space-x-3">
+            <div className="w-8 h-8 rounded-xl bg-[#1E3A2F] flex items-center justify-center text-emerald-300">
+              <Radio className="w-4 h-4" />
+            </div>
+            <div>
+              <h3 className="font-bold text-base text-[#171918]">Engineering Console & Telemetry Deck</h3>
+              <p className="text-[11px] text-stone-500">Inspect live event pipes, switch backend modes, or simulate traffic surges</p>
+            </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1 rounded-lg bg-[#151817] hover:bg-[#202422] text-stone-400 hover:text-white transition-colors cursor-pointer"
+            className="w-8 h-8 rounded-full bg-stone-100 hover:bg-stone-200 flex items-center justify-center text-stone-500 transition-colors"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
-        {/* Modal Scrollable Body */}
-        <div className="p-6 space-y-6 overflow-y-auto">
+        <div className="p-6 space-y-6 max-h-[75vh] overflow-y-auto">
           
-          {/* Environment Switcher */}
-          <div className="flex flex-wrap items-center justify-between bg-[#151817] border border-[#252826] rounded-xl p-4 gap-4">
-            <div className="flex items-center space-x-3">
-              <div className={`p-2 rounded-lg ${backendMode === 'AWS' ? 'bg-[#FF7A1A]/10 text-[#FF9A3D]' : 'bg-blue-500/10 text-blue-400'}`}>
-                {backendMode === 'AWS' ? <Cloud className="h-5 w-5" /> : <Server className="h-5 w-5" />}
+          {/* Backend Selector Banner */}
+          <div className="p-4 rounded-2xl bg-white border border-[#EAE9E4] shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <span className="text-[10px] font-mono uppercase tracking-widest text-stone-400 font-bold">Active Ingestion Pipe</span>
+              <div className="text-sm font-bold text-[#171918] flex items-center space-x-2 mt-0.5">
+                {backendMode === 'AWS' ? <Cloud className="w-4 h-4 text-sky-600" /> : <Server className="w-4 h-4 text-emerald-600" />}
+                <span>{backendMode === 'AWS' ? 'AWS Cloud (Serverless Ingestion)' : 'Local Spring Boot (8080)'}</span>
               </div>
-              <div>
-                <div className="flex items-center space-x-2">
-                  <span className="text-sm font-bold text-white">
-                    {backendMode === 'AWS' ? 'AWS Cloud (Serverless Ingestion)' : 'Local Host (Spring Boot / H2)'}
-                  </span>
-                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-[#202422] text-stone-300 font-bold border border-[#303432]">
-                    {backendMode}
-                  </span>
-                </div>
-                <p className="text-xs text-stone-400 mt-0.5">
-                  {backendMode === 'AWS'
-                    ? 'POST /events to AWS API Gateway -> IoT Core -> DynamoDB'
-                    : 'Direct REST communication with Spring Boot port 8080'}
-                </p>
-              </div>
+              <p className="text-[11px] text-stone-500 mt-0.5">
+                {backendMode === 'AWS' ? 'POST /events -> API Gateway -> Lambda/DynamoDB' : 'Direct REST persistence via local H2 database'}
+              </p>
             </div>
 
-            <div className="flex items-center bg-[#0A0D0C] p-1 rounded-lg border border-[#252826]">
+            <div className="flex rounded-xl bg-[#FAF9F5] p-1 border border-[#EAE9E4] shrink-0">
               <button
-                onClick={() => setBackendMode('LOCAL')}
-                className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all flex items-center space-x-1.5 cursor-pointer ${
-                  backendMode === 'LOCAL' ? 'bg-blue-600 text-white shadow-md' : 'text-stone-400 hover:text-stone-200'
+                onClick={() => { setBackendMode('LOCAL'); loadAllVenues('LOCAL'); }}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                  backendMode === 'LOCAL' ? 'bg-[#1E3A2F] text-white shadow-sm' : 'text-stone-600 hover:text-stone-900'
                 }`}
               >
-                <Server className="h-3.5 w-3.5" />
-                <span>Local (8080)</span>
+                Local (8080)
               </button>
               <button
-                onClick={() => setBackendMode('AWS')}
-                className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all flex items-center space-x-1.5 cursor-pointer ${
-                  backendMode === 'AWS' ? 'bg-[#FF7A1A] text-[#080A0B] font-bold shadow-md' : 'text-stone-400 hover:text-stone-200'
+                onClick={() => { setBackendMode('AWS'); loadAllVenues('AWS'); }}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                  backendMode === 'AWS' ? 'bg-[#1E3A2F] text-white shadow-sm' : 'text-stone-600 hover:text-stone-900'
                 }`}
               >
-                <Cloud className="h-3.5 w-3.5" />
-                <span>AWS Live</span>
+                AWS Live
               </button>
             </div>
           </div>
 
-          {/* Connection Error Banner */}
           {backendError && (
-            <div className="rounded-xl border border-rose-500/30 bg-rose-950/20 p-4 flex items-start space-x-3 text-rose-300">
-              <AlertCircle className="h-5 w-5 mt-0.5 text-rose-400 flex-shrink-0" />
-              <div className="flex-1 text-xs">
-                <p className="font-bold">Backend Connection Failure</p>
-                <p className="text-rose-400 mt-0.5">{backendError}</p>
-              </div>
-              <button
-                onClick={() => loadAllVenues(backendMode)}
-                className="px-3 py-1 bg-rose-500/20 hover:bg-rose-500/30 text-rose-200 text-xs font-semibold rounded-md border border-rose-500/40 flex items-center cursor-pointer"
-              >
-                <RefreshCcw className="h-3 w-3 mr-1" /> Retry
-              </button>
+            <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl flex items-center space-x-2 text-rose-700 text-xs">
+              <AlertTriangle className="w-4 h-4 shrink-0" />
+              <span>{backendError}</span>
             </div>
           )}
 
-          {/* Simulation Controller */}
-          <SimulationControl
-            selectedVenue={selectedVenue}
-            isSimulating={isSimulating}
-            onToggleSimulation={onToggleSimulation}
-            onInjectBurst={onInjectBurst}
-            gates={gates}
-            eventLog={eventLog}
-          />
+          {/* Traffic Simulator Controller */}
+          <div className="p-5 rounded-2xl bg-white border border-[#EAE9E4] shadow-sm space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h4 className="text-sm font-bold text-[#171918]">Live Simulator Controller</h4>
+                <p className="text-[11px] text-stone-500">Automate continuous multi-venue footfall fluctuation</p>
+              </div>
+              <button
+                onClick={onToggleSimulation}
+                className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-sm ${
+                  isSimulating
+                    ? 'bg-rose-600 hover:bg-rose-700 text-white'
+                    : 'bg-[#1E3A2F] hover:bg-[#132E27] text-white'
+                }`}
+              >
+                {isSimulating ? <Square className="w-3.5 h-3.5 fill-current" /> : <Play className="w-3.5 h-3.5 fill-current" />}
+                <span>{isSimulating ? 'Stop Auto Traffic' : 'Start Auto Traffic'}</span>
+              </button>
+            </div>
+
+            {/* Manual Burst Triggers */}
+            <div className="pt-2 border-t border-[#F2F1EC]">
+              <div className="flex justify-between items-center mb-2">
+                <span className="text-xs font-bold text-stone-700">
+                  Target Venue: <span className="text-[#1E3A2F]">{selectedVenue?.name || 'None Selected'}</span>
+                </span>
+                <span className="text-[10px] text-stone-400 uppercase font-mono">Surge Testing</span>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  onClick={() => onInjectBurst('ENTRY')}
+                  className="py-2.5 px-4 rounded-xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800 text-xs font-bold flex items-center justify-center space-x-2 transition-colors"
+                >
+                  <Zap className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Influx Burst (+6)</span>
+                </button>
+                <button
+                  onClick={() => onInjectBurst('EXIT')}
+                  className="py-2.5 px-4 rounded-xl bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-800 text-xs font-bold flex items-center justify-center space-x-2 transition-colors"
+                >
+                  <Zap className="w-3.5 h-3.5 text-rose-600" />
+                  <span>Exit Surge (-6)</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Event Stream Log */}
+          <div className="p-4 rounded-2xl bg-white border border-[#EAE9E4] shadow-sm space-y-2.5">
+            <div className="flex items-center justify-between text-xs font-bold text-stone-700">
+              <span>LIVE ATOMIC STREAM LOG</span>
+              <span className="text-[10px] font-mono text-stone-400">Last 5 Events</span>
+            </div>
+            <div className="space-y-1.5 max-h-36 overflow-y-auto font-mono text-[11px]">
+              {eventLog.length === 0 ? (
+                <div className="text-stone-400 py-3 text-center text-xs font-sans">
+                  No manual events triggered yet. Use buttons above or start simulator.
+                </div>
+              ) : (
+                eventLog.slice(0, 5).map((evt) => (
+                  <div key={evt.id} className="p-2 rounded-lg bg-[#FAF9F5] border border-[#EAE9E4] flex justify-between items-center">
+                    <div className="flex items-center space-x-2">
+                      <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                        evt.type === 'ENTRY' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
+                      }`}>
+                        {evt.type}
+                      </span>
+                      <span className="text-stone-700">{evt.gate}</span>
+                    </div>
+                    <span className="text-stone-400 text-[10px]">{evt.time}</span>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
         </div>
 
-        {/* Modal Footer */}
-        <div className="px-6 py-3 border-t border-[#252826] bg-[#0A0D0C] flex justify-end">
+        {/* Footer */}
+        <div className="p-4 bg-white border-t border-[#EAE9E4] flex justify-end">
           <button
             onClick={onClose}
-            className="px-4 py-1.5 rounded-lg bg-[#202422] hover:bg-[#2B302E] text-stone-200 text-xs font-mono font-semibold transition-colors cursor-pointer"
+            className="px-6 py-2 rounded-full bg-stone-100 hover:bg-stone-200 text-stone-700 font-semibold text-xs transition-colors"
           >
             Done
           </button>

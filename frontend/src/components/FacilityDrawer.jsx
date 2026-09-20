@@ -1,145 +1,154 @@
 import React from 'react';
-import { X, Clock, TrendingUp, TrendingDown, Users, ShieldAlert, CheckCircle2 } from 'lucide-react';
+import { X, Clock, TrendingUp, Users, AlertCircle, ArrowUpRight } from 'lucide-react';
 
-export default function FacilityDrawer({ venue, onClose }) {
+// Added venuePhoto to the props
+export default function FacilityDrawer({ venue, venuePhoto, onClose }) {
   if (!venue) return null;
 
   const occ = venue.currentOccupancy || 0;
   const cap = venue.capacity || 1;
-  const percentage = Math.min(100, Math.round((occ / cap) * 100));
+  const pct = Math.min(100, Math.round((occ / cap) * 100));
 
-  // Generate lightweight 8-hour popularity distribution curve centered around the current state
-  // Derived from existing occupancy and velocity
-  const currentHour = new Date().getHours();
-  const hours = [
-    { label: '10 AM', factor: 0.35 },
-    { label: '12 PM', factor: 0.65 },
-    { label: '2 PM', factor: 0.85 },
-    { label: '4 PM', factor: 0.95 },
-    { label: '6 PM', factor: 0.75 },
-    { label: '8 PM', factor: 0.40 },
-  ];
+  let badge = { label: 'QUIET', bg: 'bg-emerald-50 text-emerald-800 border-emerald-200' };
+  if (pct >= 75) {
+    badge = { label: 'BUSY', bg: 'bg-rose-50 text-rose-800 border-rose-200' };
+  } else if (pct >= 45) {
+    badge = { label: 'MODERATE', bg: 'bg-amber-50 text-amber-800 border-amber-200' };
+  }
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-black/60 backdrop-blur-sm transition-opacity duration-300">
-      <div className="w-full max-w-md bg-[#0F1211] border-l border-[#252826] h-full overflow-y-auto p-6 flex flex-col justify-between shadow-2xl text-stone-100 animate-in slide-in-from-right duration-300">
-        
-        <div>
-          {/* Header */}
-          <div className="flex items-start justify-between border-b border-[#202422] pb-4">
-            <div>
-              <span className="text-[10px] font-mono uppercase tracking-widest text-[#FF9A3D] font-bold">
-                {venue.type} TELEMETRY
+    <div className="fixed inset-0 z-50 overflow-hidden">
+      {/* Backdrop */}
+      <div 
+        onClick={onClose}
+        className="absolute inset-0 bg-stone-900/30 backdrop-blur-sm transition-opacity"
+      />
+
+      <div className="fixed inset-y-0 right-0 max-w-full flex pl-10">
+        <div className="w-screen max-w-md bg-[#FAF9F5] border-l border-[#EAE9E4] shadow-2xl flex flex-col justify-between">
+          
+          {/* Header with Photo Background */}
+          <div className="relative p-6 border-b border-[#EAE9E4] flex items-center justify-between overflow-hidden">
+            {/* Background Image & Overlay */}
+            <div 
+              className="absolute inset-0 bg-cover bg-center"
+              style={{ backgroundImage: `url(${venuePhoto})` }}
+            />
+            <div className="absolute inset-0 bg-black/60 backdrop-brightness-90" />
+            
+            <div className="relative z-10">
+              <span className="text-[10px] font-mono tracking-widest text-emerald-300 uppercase font-bold drop-shadow-sm">
+                {venue.type} TELEMETRY DECK
               </span>
-              <h2 className="text-xl font-extrabold text-white tracking-tight mt-0.5">
-                {venue.name}
-              </h2>
+              <h2 className="text-xl font-bold font-serif text-white mt-0.5 drop-shadow-md">{venue.name}</h2>
             </div>
+            
             <button
               onClick={onClose}
-              className="p-1.5 rounded-lg bg-[#181C1B] hover:bg-[#252826] text-stone-400 hover:text-white transition-colors cursor-pointer"
+              className="relative z-10 w-8 h-8 rounded-full bg-black/40 hover:bg-black/60 backdrop-blur-md border border-white/20 flex items-center justify-center text-white transition-colors shadow-sm"
             >
               <X className="w-4 h-4" />
             </button>
           </div>
 
-          {/* Core Saturation Status */}
-          <div className="mt-6 bg-[#151817] border border-[#252826] rounded-xl p-4">
-            <div className="flex justify-between items-baseline">
-              <span className="text-xs text-stone-400 uppercase font-mono tracking-wider font-semibold">Current Density</span>
-              <span className="text-xs font-mono text-stone-400">{occ} / {cap} visitors</span>
+          {/* Body */}
+          <div className="p-6 space-y-6 overflow-y-auto flex-1">
+            {/* Current Density Card */}
+            <div className="bg-white border border-[#EAE9E4] rounded-2xl p-5 shadow-sm space-y-3">
+              <div className="flex justify-between items-center text-xs font-semibold text-stone-500">
+                <span>CURRENT DENSITY</span>
+                <span className="font-mono text-stone-700">{occ.toLocaleString()} / {cap.toLocaleString()} visitors</span>
+              </div>
+              <div className="flex items-baseline space-x-3">
+                <span className="text-4xl font-black text-[#171918] font-sans">{pct}%</span>
+                <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${badge.bg}`}>
+                  {badge.label}
+                </span>
+              </div>
+              <div className="w-full h-2.5 bg-stone-100 rounded-full overflow-hidden">
+                <div 
+                  className={`h-full transition-all duration-500 ${
+                    pct >= 75 ? 'bg-rose-500' : pct >= 45 ? 'bg-amber-500' : 'bg-emerald-600'
+                  }`}
+                  style={{ width: `${pct}%` }}
+                />
+              </div>
+              <p className="text-[11px] text-stone-500 leading-relaxed">
+                Status is marked as <strong className="text-stone-800">{venue.crowdStatus || badge.label}</strong> with continuous predictive velocity damping.
+              </p>
             </div>
-            <div className="text-4xl font-extrabold text-white mt-1 font-sans">
-              {percentage}%
+
+            {/* Forecast Dual Cards */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="bg-white border border-[#EAE9E4] rounded-2xl p-4 shadow-sm">
+                <div className="flex items-center space-x-1.5 text-stone-400 text-xs font-medium">
+                  <Clock className="w-3.5 h-3.5 text-[#1E3A2F]" />
+                  <span>In 30 Min</span>
+                </div>
+                <div className="text-2xl font-bold text-[#171918] mt-1 font-sans">
+                  {venue.predictedOccupancyIn30Min ?? occ}
+                </div>
+                <div className="text-[10px] text-stone-400 font-mono mt-0.5">
+                  {Math.round(((venue.predictedOccupancyIn30Min ?? occ) / cap) * 100)}% capacity
+                </div>
+              </div>
+
+              <div className="bg-white border border-[#EAE9E4] rounded-2xl p-4 shadow-sm">
+                <div className="flex items-center space-x-1.5 text-stone-400 text-xs font-medium">
+                  <Clock className="w-3.5 h-3.5 text-[#1E3A2F]" />
+                  <span>In 60 Min</span>
+                </div>
+                <div className="text-2xl font-bold text-[#171918] mt-1 font-sans">
+                  {venue.predictedOccupancyIn60Min ?? occ}
+                </div>
+                <div className="text-[10px] text-stone-400 font-mono mt-0.5">
+                  {Math.round(((venue.predictedOccupancyIn60Min ?? occ) / cap) * 100)}% capacity
+                </div>
+              </div>
             </div>
-            <div className="mt-3 w-full h-2 bg-[#202422] rounded-full overflow-hidden">
-              <div
-                className={`h-full rounded-full transition-all duration-500 ${
-                  percentage >= 85 ? 'bg-rose-500' : percentage >= 60 ? 'bg-[#FF7A1A]' : 'bg-emerald-500'
-                }`}
-                style={{ width: `${percentage}%` }}
-              />
+
+            {/* Typical Rush Curve */}
+            <div className="bg-white border border-[#EAE9E4] rounded-2xl p-5 shadow-sm space-y-3">
+              <div className="flex justify-between items-center text-xs font-bold text-stone-700">
+                <span>TYPICAL DAILY CURVE</span>
+                <span className="text-emerald-700 font-semibold text-[11px]">Live Sensor Stream</span>
+              </div>
+              <div className="flex items-end justify-between h-20 gap-1 pt-2 px-2">
+                {[20, 35, 60, 85, 70, 45, 25].map((val, idx) => (
+                  <div
+                    key={idx}
+                    className={`flex-1 rounded-t-sm transition-all duration-300 ${
+                      idx === 3 ? 'bg-[#1E3A2F]' : 'bg-stone-200'
+                    }`}
+                    style={{ height: `${val}%` }}
+                  />
+                ))}
+              </div>
+              <div className="flex justify-between text-[10px] text-stone-400 font-mono">
+                <span>10 AM</span>
+                <span>12 PM</span>
+                <span>2 PM</span>
+                <span>4 PM</span>
+                <span>6 PM</span>
+                <span>8 PM</span>
+              </div>
+              <p className="text-[11px] text-stone-500 leading-snug pt-1">
+                Facility experiences lowest crowd density before 11:00 AM and after 8:30 PM.
+              </p>
             </div>
-            <p className="text-xs text-stone-400 mt-2.5">
-              Status is marked as <strong className="text-white">{venue.crowdStatus}</strong> with current throughput of {venue.velocityPerMin > 0 ? `+${venue.velocityPerMin}` : venue.velocityPerMin} net entries/minute.
-            </p>
           </div>
 
-          {/* 30m / 60m Predictive Horizon */}
-          <div className="mt-5 grid grid-cols-2 gap-3">
-            <div className="bg-[#151817] border border-[#252826] rounded-xl p-3.5">
-              <div className="flex items-center space-x-1.5 text-stone-400 text-xs mb-1">
-                <Clock className="w-3.5 h-3.5 text-amber-400" />
-                <span className="font-mono">In 30 Min</span>
-              </div>
-              <div className="text-xl font-bold text-white">
-                {venue.predictedOccupancyIn30Min}
-              </div>
-              <span className="text-[11px] text-stone-500 font-mono">
-                {Math.round(((venue.predictedOccupancyIn30Min || occ) / cap) * 100)}% capacity
-              </span>
-            </div>
-
-            <div className="bg-[#151817] border border-[#252826] rounded-xl p-3.5">
-              <div className="flex items-center space-x-1.5 text-stone-400 text-xs mb-1">
-                <Clock className="w-3.5 h-3.5 text-[#FF9A3D]" />
-                <span className="font-mono">In 60 Min</span>
-              </div>
-              <div className="text-xl font-bold text-white">
-                {venue.predictedOccupancyIn60Min}
-              </div>
-              <span className="text-[11px] text-stone-500 font-mono">
-                {Math.round(((venue.predictedOccupancyIn60Min || occ) / cap) * 100)}% capacity
-              </span>
-            </div>
+          {/* Footer CTA */}
+          <div className="p-6 border-t border-[#EAE9E4] bg-white">
+            <button
+              onClick={onClose}
+              className="w-full py-3 rounded-full bg-[#1E3A2F] hover:bg-[#132E27] text-white font-semibold text-xs tracking-wider transition-colors shadow-sm"
+            >
+              Close Details
+            </button>
           </div>
 
-          {/* Best Time to Visit (Popularity Curve) */}
-          <div className="mt-6 bg-[#151817] border border-[#252826] rounded-xl p-4">
-            <div className="flex items-center justify-between mb-4">
-              <span className="text-xs font-bold text-white tracking-wider uppercase font-mono">
-                Typical Daily Curve
-              </span>
-              <span className="text-[10px] text-amber-400 font-mono font-bold">Live Highlight</span>
-            </div>
-
-            <div className="flex items-end justify-between h-24 pt-4 border-b border-[#252826] px-2">
-              {hours.map((h, i) => {
-                const heightPercent = Math.round(h.factor * 100);
-                const isCurrent = i === 2; // Approximate mid-day active highlight
-                return (
-                  <div key={h.label} className="flex flex-col items-center gap-1.5 h-full justify-end group">
-                    <div
-                      className={`w-6 rounded-t transition-all duration-300 ${
-                        isCurrent
-                          ? 'bg-[#FF7A1A] shadow-lg shadow-[#FF7A1A]/30'
-                          : 'bg-[#252826] hover:bg-[#343836]'
-                      }`}
-                      style={{ height: `${heightPercent}%` }}
-                    />
-                    <span className={`text-[9px] font-mono ${isCurrent ? 'text-white font-bold' : 'text-stone-500'}`}>
-                      {h.label}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-            <p className="text-[11px] text-stone-500 mt-3 leading-relaxed">
-              Based on historical damping models. Facility experiences lowest density before 11:00 AM and after 7:30 PM.
-            </p>
-          </div>
         </div>
-
-        {/* Footer */}
-        <div className="pt-6 border-t border-[#202422]">
-          <button
-            onClick={onClose}
-            className="w-full py-2.5 rounded-lg bg-[#202422] hover:bg-[#2A2E2C] text-stone-200 text-xs font-semibold tracking-wider transition-colors cursor-pointer"
-          >
-            Close Details
-          </button>
-        </div>
-
       </div>
     </div>
   );
