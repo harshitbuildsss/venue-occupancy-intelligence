@@ -465,7 +465,7 @@ Potential future improvements include:
 
 ---
 
-## Team
+## Author
 
 ### Harshit Kumar Singh
 
