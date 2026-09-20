@@ -1,22 +1,23 @@
 import React, { useState } from 'react';
 import BrandLogo from './BrandLogo';
-import { SlidersHorizontal, Info, X, Cpu, Database, Activity, Phone, Copy, Check } from 'lucide-react';
+import { SlidersHorizontal, Info, X, Cpu, Database, Activity, Phone, Mail, Copy, Check } from 'lucide-react';
 
 export default function Navbar({ isPolling, activeCount, isOperatorOpen, onToggleOperator }) {
   const [isAboutOpen, setIsAboutOpen] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const [copiedType, setCopiedType] = useState(null);
 
-  const myPhoneNumber = "+91 98765 43210";
+  const myPhoneNumber = "+91 80765 17597";
+  const myEmail = "harshitnself@gmail.com";
 
   const scrollToGrid = () => {
     const el = document.getElementById('live-spaces-grid');
     if (el) el.scrollIntoView({ behavior: 'smooth' });
   };
 
-  const copyNumber = () => {
-    navigator.clipboard.writeText(myPhoneNumber);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
+  const copyToClipboard = (text, type) => {
+    navigator.clipboard.writeText(text);
+    setCopiedType(type);
+    setTimeout(() => setCopiedType(null), 1500);
   };
 
   return (
@@ -40,7 +41,7 @@ export default function Navbar({ isPolling, activeCount, isOperatorOpen, onToggl
           </button>
         </nav>
 
-        {/* Right Actions: Phone Button Removed, Operator Mode & Avatar Kept */}
+        {/* Right Actions: Operator Mode & Avatar */}
         <div className="flex items-center space-x-3">
           <button
             onClick={onToggleOperator}
@@ -95,24 +96,47 @@ export default function Navbar({ isPolling, activeCount, isOperatorOpen, onToggl
               </div>
             </div>
 
-            <div className="pt-3 border-t border-[#ECEBE6] flex items-center justify-between text-xs text-stone-500">
-              <div>
-                <span className="font-medium">Designed & Engineered by</span>
-                <div className="font-semibold text-[#183B2B] mt-0.5">Harshit Kumar Singh</div>
+            <div className="pt-3 border-t border-[#ECEBE6] space-y-3">
+              <div className="flex items-center justify-between text-xs text-stone-500">
+                <div>
+                  <span className="font-medium">Designed & Engineered by</span>
+                  <div className="font-semibold text-[#183B2B] mt-0.5">Harshit Kumar Singh</div>
+                </div>
               </div>
 
-              <div 
-                onClick={copyNumber}
-                className="flex items-center space-x-2 bg-white px-3 py-1.5 rounded-full border border-[#EAE9E4] cursor-pointer hover:border-stone-400 transition-colors shadow-2xs"
-                title="Click to copy number"
-              >
-                <Phone className="w-3.5 h-3.5 text-emerald-700" />
-                <span className="font-mono font-medium text-[#171918]">{myPhoneNumber}</span>
-                {copied ? (
-                  <Check className="w-3 h-3 text-emerald-600" />
-                ) : (
-                  <Copy className="w-3 h-3 text-stone-400" />
-                )}
+              {/* Contact Actions Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div 
+                  onClick={() => copyToClipboard(myPhoneNumber, 'phone')}
+                  className="flex items-center justify-between bg-white px-3 py-2 rounded-xl border border-[#EAE9E4] cursor-pointer hover:border-stone-400 transition-colors shadow-2xs"
+                  title="Click to copy phone number"
+                >
+                  <div className="flex items-center space-x-2">
+                    <Phone className="w-3.5 h-3.5 text-emerald-700" />
+                    <span className="font-mono text-xs font-medium text-[#171918]">{myPhoneNumber}</span>
+                  </div>
+                  {copiedType === 'phone' ? (
+                    <Check className="w-3.5 h-3.5 text-emerald-600" />
+                  ) : (
+                    <Copy className="w-3.5 h-3.5 text-stone-400" />
+                  )}
+                </div>
+
+                <div 
+                  onClick={() => copyToClipboard(myEmail, 'email')}
+                  className="flex items-center justify-between bg-white px-3 py-2 rounded-xl border border-[#EAE9E4] cursor-pointer hover:border-stone-400 transition-colors shadow-2xs"
+                  title="Click to copy email"
+                >
+                  <div className="flex items-center space-x-2 truncate">
+                    <Mail className="w-3.5 h-3.5 text-sky-700 shrink-0" />
+                    <span className="font-mono text-xs font-medium text-[#171918] truncate">{myEmail}</span>
+                  </div>
+                  {copiedType === 'email' ? (
+                    <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                  ) : (
+                    <Copy className="w-3.5 h-3.5 text-stone-400 shrink-0" />
+                  )}
+                </div>
               </div>
             </div>
 
