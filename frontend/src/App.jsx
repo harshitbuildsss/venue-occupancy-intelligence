@@ -7,9 +7,13 @@ import FacilityDrawer from './components/FacilityDrawer';
 import OperatorModal from './components/OperatorModal';
 import ScrollHeroVideo from './components/ScrollHeroVideo';
 import { fetchVenue, createVenue, sendOccupancyEvent } from './services/api';
-import { Search, ChevronDown, Navigation, TrendingUp, AlertCircle } from 'lucide-react';
+import { Search, ChevronDown, Navigation, TrendingUp, TrendingDown, AlertCircle } from 'lucide-react';
 
 const AWS_BASE_URL = 'https://d35p0u4mf9.execute-api.ap-south-1.amazonaws.com';
+const API_HEADERS = {
+  'Content-Type': 'application/json',
+  'x-hackathon-secret': 'bharat-2026'
+};
 
 const INITIAL_VENUES = [
   { venueId: 'mall_pacific', name: 'Pacific Mall', type: 'MALL', capacity: 2500, initialOccupancy: 840, location: 'Delhi NCR' },
@@ -134,7 +138,7 @@ export default function App() {
       let normalizedVenues = [];
 
       if (mode === 'AWS') {
-        const res = await fetch(`${AWS_BASE_URL}/venues`);
+        const res = await fetch(`${AWS_BASE_URL}/venues`, { headers: API_HEADERS });
         if (!res.ok) throw new Error(`HTTP error: ${res.status}`);
         const data = await res.json();
 
@@ -226,13 +230,9 @@ export default function App() {
     const currentMode = backendModeRef.current;
     const uniqueEventId = `evt_${Date.now()}_${Math.floor(Math.random() * 100000)}`;
     
-    // =======================================================
-    // FIX: Randomized dynamic delta based on venue capacity
-    // =======================================================
     const targetVenue = venuesRef.current.find(v => v.venueId === venueId);
     const cap = targetVenue ? targetVenue.capacity : 1000;
     
-    // Generate organic clusters of people entering/exiting based on how big the venue is
     const maxDelta = cap > 5000 ? 25 : (cap > 1000 ? 8 : 3);
     const minDelta = 1;
     const delta = Math.floor(Math.random() * (maxDelta - minDelta + 1)) + minDelta;
@@ -262,7 +262,7 @@ export default function App() {
       } else {
         await fetch(`${AWS_BASE_URL}/events`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: API_HEADERS,
           body: JSON.stringify({
             eventId: uniqueEventId,
             venueId,
@@ -325,12 +325,41 @@ export default function App() {
   const selP30 = Math.round(((selectedVenue.predictedOccupancyIn30Min || selOcc) / selCap) * 100);
   const selP60 = Math.round(((selectedVenue.predictedOccupancyIn60Min || selOcc) / selCap) * 100);
 
+  // =======================================================
+  // DYNAMIC UI LOGIC BASED ON VENUE STATE
+  // =======================================================
+  const isBusy = selPct >= 75;
+  const isQuiet = selPct < 45;
+  const isEmptying = (selectedVenue.velocityPerMin || 0) < 0;
+  const isStable = (selectedVenue.velocityPerMin || 0) === 0;
+
+  // Dynamic Chart Arrays
+  const activityHeights = isBusy 
+    ? [40, 55, 70, 85, 95, 100, 90, 80, 60, 45, 30] 
+    : isQuiet 
+      ? [10, 15, 20, 25, 35, 30, 25, 20, 15, 10, 5] 
+      : [20, 30, 45, 60, 75, 65, 55, 45, 30, 20, 15];
+
+  const bestTimeHeights = isBusy 
+    ? [10, 15, 20, 25, 90, 95, 85, 40, 30, 20, 10] 
+    : isQuiet 
+      ? [50, 60, 70, 80, 20, 25, 20, 75, 65, 55, 45] 
+      : [15, 20, 25, 30, 80, 85, 75, 35, 25, 20, 15];
+
+  // Dynamic Status Badges & Text
   let spotBadge = { label: 'QUIET', bg: 'bg-[#EAF5EF]', text: 'text-[#2D7A51]' };
-  if (selPct >= 75) {
+  let alertBadge = { label: 'Quieter than usual right now', bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-100', icon: TrendingDown };
+  
+  if (isBusy) {
     spotBadge = { label: 'BUSY', bg: 'bg-[#FCEFEF]', text: 'text-[#C74343]' };
-  } else if (selPct >= 45) {
+    alertBadge = { label: 'Higher than usual for this time', bg: 'bg-orange-50', text: 'text-[#C74343]', border: 'border-orange-100', icon: AlertCircle };
+  } else if (!isQuiet) {
     spotBadge = { label: 'MODERATE', bg: 'bg-[#FDF5E6]', text: 'text-[#B47B1E]' };
+    alertBadge = { label: 'Typical foot traffic for this time', bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-100', icon: TrendingUp };
   }
+
+  // Trend Text (Fake multiplier purely for visual effect)
+  const fakeTrendPercent = Math.max(1, Math.abs(Math.round((selectedVenue.velocityPerMin || 0) * 8)));
 
   return (
     <div className="min-h-screen w-full bg-[#F3F2EC] text-[#171918] font-sans selection:bg-[#1E3A2F]/20 relative overflow-x-hidden">
@@ -478,10 +507,10 @@ export default function App() {
                   </span>
                 </div>
 
-                <div className="flex items-center space-x-2 text-xs font-semibold text-rose-600">
-                  <TrendingUp className="w-3.5 h-3.5" />
-                  <span>Getting busier</span>
-                  <span className="text-stone-400 font-normal">• +12% in last 30 mins</span>
+                <div className={`flex items-center space-x-2 text-xs font-semibold ${isEmptying ? 'text-emerald-600' : isStable ? 'text-stone-500' : 'text-rose-600'}`}>
+                  {isEmptying ? <TrendingDown className="w-3.5 h-3.5" /> : isStable ? <TrendingUp className="w-3.5 h-3.5 text-stone-400" /> : <TrendingUp className="w-3.5 h-3.5" />}
+                  <span>{isEmptying ? 'Emptying out' : isStable ? 'Stable traffic' : 'Getting busier'}</span>
+                  <span className="text-stone-400 font-normal">• {isStable ? 'No recent changes' : `${isEmptying ? '-' : '+'}${fakeTrendPercent}% in last 30 mins`}</span>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
@@ -502,11 +531,11 @@ export default function App() {
                   </div>
                   
                   <div className="flex items-end justify-between h-16 gap-1 px-1">
-                    {[20, 30, 45, 60, 75, 95, 80, 50, 40, 30, 20].map((val, i) => (
+                    {activityHeights.map((val, i) => (
                       <div
                         key={i}
-                        className={`flex-1 rounded-t-sm transition-all ${
-                          i === 5 ? 'bg-[#E25C38]' : val > 60 ? 'bg-[#E9977E]' : 'bg-[#D2E4DA]'
+                        className={`flex-1 rounded-t-sm transition-all duration-500 ${
+                          i === 5 ? 'bg-[#E25C38]' : val > 80 ? 'bg-[#E9977E]' : 'bg-[#D2E4DA]'
                         }`}
                         style={{ height: `${val}%` }}
                       />
@@ -523,9 +552,9 @@ export default function App() {
                   </div>
                 </div>
 
-                <div className="flex items-center space-x-2 px-3 py-2 rounded-xl bg-orange-50 text-[#C74343] text-xs font-medium border border-orange-100">
-                  <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                  <span>Higher than usual for this time</span>
+                <div className={`flex items-center space-x-2 px-3 py-2 rounded-xl text-xs font-medium border ${alertBadge.bg} ${alertBadge.text} ${alertBadge.border}`}>
+                  <alertBadge.icon className="w-3.5 h-3.5 shrink-0" />
+                  <span>{alertBadge.label}</span>
                 </div>
 
                 <div className="pt-1">
@@ -534,10 +563,10 @@ export default function App() {
                     <span className="text-emerald-700 text-[11px] font-semibold">Recommended</span>
                   </div>
                   <div className="flex items-end justify-between h-8 gap-1">
-                    {[15, 20, 25, 30, 80, 85, 75, 35, 25, 20, 15].map((h, idx) => (
+                    {bestTimeHeights.map((h, idx) => (
                       <div
                         key={idx}
-                        className={`flex-1 rounded-t-sm ${
+                        className={`flex-1 rounded-t-sm transition-all duration-500 ${
                           idx >= 4 && idx <= 6 ? 'bg-emerald-600' : 'bg-stone-200'
                         }`}
                         style={{ height: `${h}%` }}

@@ -50,9 +50,10 @@ export default function VenueCard({ venue, isSelected, onSelect }) {
   return (
     <div 
       onClick={() => onSelect(venue.venueId)}
-      className={`bg-white rounded-[24px] border transition-all cursor-pointer overflow-hidden group ${
-        isSelected ? 'border-[#1E3A2F] shadow-md' : 'border-[#EAE9E4] hover:shadow-md'
-      }`}
+      className={`bg-white rounded-[24px] border transition-all duration-500 cursor-pointer overflow-hidden group 
+        ${isSelected ? 'border-[#1E3A2F] shadow-md' : 'border-[#EAE9E4] hover:shadow-md'} 
+        ${diff !== null ? 'shadow-[0_8px_30px_rgba(0,0,0,0.12)] border-stone-300 scale-[1.01]' : ''}
+      `}
     >
       {/* Top Image Area */}
       <div className="relative h-48 w-full bg-stone-100 overflow-hidden">

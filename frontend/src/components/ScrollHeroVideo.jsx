@@ -96,9 +96,6 @@ export default function ScrollHeroVideo() {
       if (isAnimating.current) return;
 
       // =======================================================
-      // THE FIX: If we are on the brand image (Slide 2), 
-      // completely ignore scrolling so they are forced to click.
-      // This guarantees ZERO trackpad momentum bleed.
       // =======================================================
       if (slide === 2) {
         e.preventDefault(); 

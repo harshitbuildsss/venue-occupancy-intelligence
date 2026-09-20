@@ -1,7 +1,6 @@
 import React from 'react';
 import { X, Clock, TrendingUp, Users, AlertCircle, ArrowUpRight } from 'lucide-react';
 
-// Added venuePhoto to the props
 export default function FacilityDrawer({ venue, venuePhoto, onClose }) {
   if (!venue) return null;
 
@@ -9,16 +8,25 @@ export default function FacilityDrawer({ venue, venuePhoto, onClose }) {
   const cap = venue.capacity || 1;
   const pct = Math.min(100, Math.round((occ / cap) * 100));
 
+  const isBusy = pct >= 75;
+  const isQuiet = pct < 45;
+
   let badge = { label: 'QUIET', bg: 'bg-emerald-50 text-emerald-800 border-emerald-200' };
-  if (pct >= 75) {
+  if (isBusy) {
     badge = { label: 'BUSY', bg: 'bg-rose-50 text-rose-800 border-rose-200' };
-  } else if (pct >= 45) {
+  } else if (!isQuiet) {
     badge = { label: 'MODERATE', bg: 'bg-amber-50 text-amber-800 border-amber-200' };
   }
 
+  // Dynamic daily curve to match the sidebar state
+  const curveData = isBusy
+    ? [30, 50, 75, 100, 85, 60, 40]
+    : isQuiet
+      ? [10, 20, 30, 40, 35, 25, 15]
+      : [20, 35, 60, 85, 70, 45, 25];
+
   return (
     <div className="fixed inset-0 z-50 overflow-hidden">
-      {/* Backdrop */}
       <div 
         onClick={onClose}
         className="absolute inset-0 bg-stone-900/30 backdrop-blur-sm transition-opacity"
@@ -27,9 +35,7 @@ export default function FacilityDrawer({ venue, venuePhoto, onClose }) {
       <div className="fixed inset-y-0 right-0 max-w-full flex pl-10">
         <div className="w-screen max-w-md bg-[#FAF9F5] border-l border-[#EAE9E4] shadow-2xl flex flex-col justify-between">
           
-          {/* Header with Photo Background */}
           <div className="relative p-6 border-b border-[#EAE9E4] flex items-center justify-between overflow-hidden">
-            {/* Background Image & Overlay */}
             <div 
               className="absolute inset-0 bg-cover bg-center"
               style={{ backgroundImage: `url(${venuePhoto})` }}
@@ -51,9 +57,7 @@ export default function FacilityDrawer({ venue, venuePhoto, onClose }) {
             </button>
           </div>
 
-          {/* Body */}
           <div className="p-6 space-y-6 overflow-y-auto flex-1">
-            {/* Current Density Card */}
             <div className="bg-white border border-[#EAE9E4] rounded-2xl p-5 shadow-sm space-y-3">
               <div className="flex justify-between items-center text-xs font-semibold text-stone-500">
                 <span>CURRENT DENSITY</span>
@@ -78,7 +82,6 @@ export default function FacilityDrawer({ venue, venuePhoto, onClose }) {
               </p>
             </div>
 
-            {/* Forecast Dual Cards */}
             <div className="grid grid-cols-2 gap-3">
               <div className="bg-white border border-[#EAE9E4] rounded-2xl p-4 shadow-sm">
                 <div className="flex items-center space-x-1.5 text-stone-400 text-xs font-medium">
@@ -107,17 +110,16 @@ export default function FacilityDrawer({ venue, venuePhoto, onClose }) {
               </div>
             </div>
 
-            {/* Typical Rush Curve */}
             <div className="bg-white border border-[#EAE9E4] rounded-2xl p-5 shadow-sm space-y-3">
               <div className="flex justify-between items-center text-xs font-bold text-stone-700">
                 <span>TYPICAL DAILY CURVE</span>
                 <span className="text-emerald-700 font-semibold text-[11px]">Live Sensor Stream</span>
               </div>
               <div className="flex items-end justify-between h-20 gap-1 pt-2 px-2">
-                {[20, 35, 60, 85, 70, 45, 25].map((val, idx) => (
+                {curveData.map((val, idx) => (
                   <div
                     key={idx}
-                    className={`flex-1 rounded-t-sm transition-all duration-300 ${
+                    className={`flex-1 rounded-t-sm transition-all duration-500 ${
                       idx === 3 ? 'bg-[#1E3A2F]' : 'bg-stone-200'
                     }`}
                     style={{ height: `${val}%` }}
@@ -138,7 +140,6 @@ export default function FacilityDrawer({ venue, venuePhoto, onClose }) {
             </div>
           </div>
 
-          {/* Footer CTA */}
           <div className="p-6 border-t border-[#EAE9E4] bg-white">
             <button
               onClick={onClose}
